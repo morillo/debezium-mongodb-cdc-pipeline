@@ -1,0 +1,22 @@
+# Lakeflow Declarative Pipeline resource for the MongoDB CDC framework.
+
+resources:
+  pipelines:
+    debezium_mongodb_cdc:
+      name: debezium-mongodb-cdc-${bundle.target}
+      catalog: ${var.catalog}
+      schema: ${var.target_schema}
+      serverless: true
+      continuous: false # run triggered; schedule with a job or enable
+      channel: CURRENT
+      root_path: ../src
+      # Only the entry point is pipeline source; cdc_framework/ is a
+      # regular package it imports (relative imports break if the
+      # runtime executes those modules directly).
+      libraries:
+        - glob:
+            include: ../src/cdc_pipeline.py
+      configuration:
+        cdc.environment: ${var.environment}
+        cdc.config_path: ${workspace.file_path}/config/collections.yaml
+        cdc.src_path: ${workspace.file_path}/src

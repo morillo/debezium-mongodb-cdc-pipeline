@@ -1,0 +1,54 @@
+# Databricks Asset Bundle for the MongoDB CDC pipeline framework.
+#
+# One bundle, three SDLC targets. Deploy with:
+#   databricks bundle deploy -t dev|test|prod
+# Each target pins its own Unity Catalog catalog and environment name;
+# the pipeline code and collection metadata are identical across
+# targets.
+
+bundle:
+  name: debezium-mongodb-cdc-pipeline
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for the pipeline's datasets.
+    default: cdc_dev
+  target_schema:
+    description: Unity Catalog schema for the medallion tables.
+    default: cdc_mongo_fw
+  environment:
+    description: SDLC environment name, resolves {env} in landing paths.
+    default: dev
+
+targets:
+  dev:
+    mode: development # prefixes resources per user, allows destructive dev
+    default: true
+    variables:
+      catalog: cdc_dev
+      environment: dev
+    # workspace:
+    #   host: https://<your-dev-workspace>.cloud.databricks.com
+
+  test:
+    mode: production # deployed by CI as a service principal, no prefixing
+    variables:
+      catalog: cdc_test
+      environment: test
+    # workspace:
+    #   host: https://<your-test-workspace>.cloud.databricks.com
+    # run_as:
+    #   service_principal_name: <test-sp-application-id>
+
+  prod:
+    mode: production
+    variables:
+      catalog: cdc_prod
+      environment: prod
+    # workspace:
+    #   host: https://<your-prod-workspace>.cloud.databricks.com
+    # run_as:
+    #   service_principal_name: <prod-sp-application-id>

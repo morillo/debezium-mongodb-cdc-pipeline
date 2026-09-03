@@ -1,0 +1,70 @@
+# Collection metadata for the MongoDB Debezium CDC pipeline.
+#
+# One file serves every environment: "{env}" is replaced with the value
+# of the cdc.environment pipeline setting (dev | test | prod). Adding a
+# source collection is one new entry — no code changes.
+#
+# Per-collection reference (see cdc_framework/config.py for full docs):
+#   name              logical collection name (required)
+#   source_database   MongoDB database, used in the topic (required)
+#   scd_type          1 = current state (default), 2 = full history
+#   path              override the derived landing directory
+#   cluster_by        liquid clustering columns for the silver table
+#   projection        list of SQL expressions over the `doc` VARIANT
+#                     (SCD2 silver stores JSON text as `doc_json`;
+#                     the typed view still exposes `doc`);
+#                     when set, a <name>_typed view is materialized
+#   expectations      warn / drop / fail -> {rule_name: SQL constraint}
+#
+# The merge key is always the document _id (extracted from extended
+# JSON: ObjectId, scalar, or composite). Events are expected under
+# {landing_root}/{topic_template}.
+
+landing_root: /Volumes/cdc_{env}/landing/debezium
+topic_template: mongodb.{database}.{collection}
+
+defaults:
+  source_database: shopdb
+  scd_type: 1
+
+collections:
+  - name: customers
+    comment: Customer documents, full history retained.
+    scd_type: 2
+    cluster_by: [_id]
+    projection:
+      - "doc:name::string AS name"
+      - "doc:email::string AS email"
+      - "doc:address.city::string AS city"
+      - "doc:loyalty_tier::string AS loyalty_tier"
+      - "cast(doc:signup['$date']::long / 1000 as timestamp) AS signup_at"
+    expectations:
+      drop:
+        valid_email: >-
+          doc_json:email IS NULL OR doc_json:email::string LIKE '%@%'
+
+  - name: orders
+    cluster_by: [_id]
+    projection:
+      - "doc:customer_id::string AS customer_id"
+      - "doc:total['$numberLong']::long AS total_cents"
+      - "doc:status::string AS status"
+    expectations:
+      warn:
+        positive_total: "doc:total['$numberLong']::long >= 0"
+
+  - name: products
+
+gold:
+  - name: gold_customer_order_counts
+    comment: Order count per current customer.
+    sql: |
+      SELECT
+        c._id AS customer_id,
+        c.doc_json:name::string AS name,
+        COUNT(o._id) AS order_count
+      FROM customers_silver AS c
+      LEFT JOIN orders_silver AS o
+        ON o.doc:customer_id::string = c._id
+      WHERE c.`__END_AT` IS NULL  -- customers is SCD2: current rows only
+      GROUP BY c._id, c.doc_json:name::string
