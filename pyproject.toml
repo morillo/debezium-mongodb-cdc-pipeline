@@ -23,3 +23,7 @@ select = ["E", "W", "F", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.uv]
+# Not a distributable package: `uv sync` installs the dependencies only.
+package = false
