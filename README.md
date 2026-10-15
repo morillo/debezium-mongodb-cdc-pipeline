@@ -149,21 +149,19 @@ secrets are not configured.
 ## Running on Databricks Free Edition
 
 Verified end-to-end on Databricks Free Edition (serverless). Use the
-built-in `workspace` catalog and a volume for landing, and point
-`landing_root` in `config/collections.yaml` at it:
-
-```yaml
-landing_root: /Volumes/workspace/landing/debezium
-```
+built-in `workspace` catalog and a volume for landing, and point the
+pipeline at that volume with the `landing_root` bundle variable (the
+committed `config/collections.yaml` stays unchanged; the override
+reaches the pipeline as the `cdc.landing_root` setting):
 
 ```bash
 databricks schemas create cdc_mongo_fw workspace
 databricks fs cp -r ./events/ \
   dbfs:/Volumes/workspace/landing/debezium/
 
-databricks bundle deploy -t dev --var="catalog=workspace"
-databricks bundle run    -t dev debezium_mongodb_cdc \
-  --var="catalog=workspace"
+databricks bundle deploy -t dev --var="catalog=workspace" \
+  --var="landing_root=/Volumes/workspace/landing/debezium"
+databricks bundle run    -t dev debezium_mongodb_cdc
 ```
 
 The verification run covered three collections at once: SCD2 history
