@@ -22,6 +22,13 @@ variables:
   environment:
     description: SDLC environment name, resolves {env} in landing paths.
     default: dev
+  landing_root:
+    description: >-
+      Optional override of landing_root in config/collections.yaml ({env} is still
+      resolved). Empty means use the file's value. Example (Free Edition,
+      no cdc_<env> catalog): --var catalog=workspace
+      --var landing_root=/Volumes/workspace/landing/debezium
+    default: ""
 
 targets:
   dev:

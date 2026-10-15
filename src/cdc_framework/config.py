@@ -109,12 +109,21 @@ class PipelineConfig:
     gold_views: tuple[GoldViewConfig, ...] = ()
 
 
-def load_config(path: str | Path, environment: str) -> PipelineConfig:
+def load_config(
+    path: str | Path,
+    environment: str,
+    landing_root: str | None = None,
+) -> PipelineConfig:
     """Load and validate the metadata file for the given environment.
 
     ``{env}`` placeholders in ``landing_root`` (and per-collection
     ``path`` overrides) are replaced with ``environment``, which is how
     one metadata file serves dev, test, and prod.
+
+    ``landing_root``, when given, replaces the file's ``landing_root``
+    (the ``cdc.landing_root`` pipeline setting). This lets a deployment
+    whose volumes live elsewhere, e.g. the ``workspace`` catalog on
+    Free Edition, run the committed metadata unchanged.
 
     Raises:
         ConfigError: if the file is missing, unparsable, or invalid.
@@ -122,7 +131,8 @@ def load_config(path: str | Path, environment: str) -> PipelineConfig:
     raw = _parse_file(Path(path))
     errors: list[str] = []
 
-    landing_root = _string(raw, "landing_root", errors)
+    if landing_root is None:
+        landing_root = _string(raw, "landing_root", errors)
     landing_root = landing_root.replace("{env}", environment).rstrip("/")
     topic_template = raw.get("topic_template", DEFAULT_TOPIC_TEMPLATE)
     defaults = raw.get("defaults") or {}

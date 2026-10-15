@@ -20,3 +20,4 @@ resources:
         cdc.environment: ${var.environment}
         cdc.config_path: ${workspace.file_path}/config/collections.yaml
         cdc.src_path: ${workspace.file_path}/src
+        cdc.landing_root: ${var.landing_root}
