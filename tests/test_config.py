@@ -37,6 +37,31 @@ def write(tmp_path, text, suffix=".yaml"):
     return path
 
 
+def test_landing_root_override_replaces_file_value(tmp_path):
+    config = load_config(
+        write(tmp_path, VALID_YAML),
+        environment="dev",
+        landing_root="/Volumes/workspace/landing/debezium/",
+    )
+
+    assert config.landing_root == "/Volumes/workspace/landing/debezium"
+    customers, orders = config.collections
+    assert customers.path == (
+        "/Volumes/workspace/landing/debezium/mongodb.shopdb.customers"
+    )
+    # per-collection path overrides are untouched by the landing_root override
+    assert orders.path == "/Volumes/other_dev/landing/special/orders"
+
+
+def test_landing_root_override_still_resolves_env(tmp_path):
+    config = load_config(
+        write(tmp_path, VALID_YAML),
+        environment="test",
+        landing_root="/mnt/{env}/debezium",
+    )
+    assert config.landing_root == "/mnt/test/debezium"
+
+
 def test_loads_valid_yaml_and_resolves_environment(tmp_path):
     config = load_config(write(tmp_path, VALID_YAML), environment="test")
 

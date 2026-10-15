@@ -53,6 +53,9 @@ from cdc_framework import flows, load_config  # noqa: E402
 config = load_config(
     path=_required_setting("cdc.config_path"),
     environment=_required_setting("cdc.environment"),
+    # Optional: overrides the metadata file's landing_root (bundle variable
+    # `landing_root`); empty/unset means "use the value from the file".
+    landing_root=spark.conf.get("cdc.landing_root", None) or None,
 )
 
 for collection in config.collections:

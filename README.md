@@ -125,6 +125,16 @@ databricks bundle deploy   -t test    # via CI, as a service principal
 databricks bundle deploy   -t prod    # via CI, gated release
 ```
 
+The landing root defaults to `landing_root` in `config/collections.yaml`
+(`/Volumes/cdc_<env>/landing/debezium`). Workspaces whose volumes live
+elsewhere override it per deployment without editing the metadata file,
+e.g. Databricks Free Edition (only the `workspace` catalog exists):
+
+```bash
+databricks bundle deploy -t dev --var catalog=workspace \
+  --var landing_root=/Volumes/workspace/landing/debezium
+```
+
 Fill in the `workspace.host` (and `run_as` service principals for
 test/prod) in `databricks.yml` before first use.
 
