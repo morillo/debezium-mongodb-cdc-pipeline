@@ -164,19 +164,23 @@ def _register_silver_feed(
             ).drop("doc")
         return parsed
 
-    # Expectations exist in Databricks' pyspark.pipelines, not in the OSS stubs.
-    silver_feed = dp.expect_or_drop(*TOMBSTONE_EXPECTATION)(silver_feed)  # type: ignore[attr-defined]
-    silver_feed = dp.expect_or_drop(*ID_EXPECTATION)(silver_feed)  # type: ignore[attr-defined]
+    # Databricks adds expectations to pyspark.pipelines; OSS stubs lack them.
+    silver_feed = dp.expect_or_drop(*TOMBSTONE_EXPECTATION)(  # type: ignore
+        silver_feed
+    )
+    silver_feed = dp.expect_or_drop(*ID_EXPECTATION)(  # type: ignore
+        silver_feed
+    )
     if collection.expectations.get("drop"):
-        silver_feed = dp.expect_all_or_drop(  # type: ignore[attr-defined]
+        silver_feed = dp.expect_all_or_drop(  # type: ignore
             collection.expectations["drop"]
         )(silver_feed)
     if collection.expectations.get("warn"):
-        silver_feed = dp.expect_all(collection.expectations["warn"])(  # type: ignore[attr-defined]
-            silver_feed
-        )
+        silver_feed = dp.expect_all(  # type: ignore
+            collection.expectations["warn"]
+        )(silver_feed)
     if collection.expectations.get("fail"):
-        silver_feed = dp.expect_all_or_fail(  # type: ignore[attr-defined]
+        silver_feed = dp.expect_all_or_fail(  # type: ignore
             collection.expectations["fail"]
         )(silver_feed)
     dp.temporary_view(
@@ -211,8 +215,8 @@ def _register_silver(collection: CollectionConfig) -> None:
         sequence_by=F.struct(F.col(CDC_TS_MS), F.col(CDC_ORD)),
         apply_as_deletes=F.expr(DELETE_PREDICATE),
         except_column_list=list(CDC_METADATA_COLUMNS),
-        # Databricks supports SCD type 2 here; the OSS stubs only declare type 1.
-        stored_as_scd_type=collection.scd_type,  # type: ignore[arg-type]
+        # Databricks supports SCD type 2 here; OSS stubs only declare type 1.
+        stored_as_scd_type=collection.scd_type,  # type: ignore
     )
 
 
