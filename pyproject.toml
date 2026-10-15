@@ -9,6 +9,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "pyright>=1.1.414",
+    "pyspark>=4.1",
     "pytest>=8.0",
     "ruff>=0.5",
 ]

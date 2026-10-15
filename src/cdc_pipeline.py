@@ -19,7 +19,18 @@ import sys
 
 from pyspark.sql import SparkSession
 
-spark = SparkSession.getActiveSession()
+
+def _active_spark() -> SparkSession:
+    session = SparkSession.getActiveSession()
+    if session is None:
+        raise RuntimeError(
+            "No active SparkSession: cdc_pipeline.py must run inside a "
+            "Lakeflow pipeline."
+        )
+    return session
+
+
+spark = _active_spark()
 
 
 def _required_setting(key: str) -> str:
