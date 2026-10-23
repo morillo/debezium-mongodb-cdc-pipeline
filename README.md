@@ -140,11 +140,20 @@ test/prod) in `databricks.yml` before first use.
 
 ## CI/CD
 
-`.github/workflows/ci.yml`: every PR runs `ruff` lint, `pytest` unit
-tests (the metadata loader is Spark-free and runs on any CI runner),
-and `bundle validate`; merges to `main` deploy to test and tags deploy
-to prod — with all Databricks steps skipping gracefully when workspace
-secrets are not configured.
+`.github/workflows/ci.yml`: every PR runs `ruff` lint, `pyright` type
+check, `pytest` unit tests (the metadata loader is Spark-free and runs
+on any CI runner), and `bundle validate`; merges to `main` deploy to
+test and tags deploy to prod — with all Databricks steps skipping
+gracefully when workspace secrets are not configured.
+
+## Local development
+
+```bash
+uv sync                    # installs the dev tools (ruff, pyright, pytest)
+uv run ruff check src tests
+uv run pyright
+uv run pytest
+```
 
 ## Running on Databricks Free Edition
 
