@@ -7,7 +7,7 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pyright>=1.1.414",
     "pyspark>=4.1",

@@ -24,7 +24,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked
       - name: Lint
         run: uv run ruff check src tests
       - name: Type check (Pyright, same checks as VS Code Pylance)
