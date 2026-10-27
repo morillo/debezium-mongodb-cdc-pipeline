@@ -5,3 +5,6 @@ __pycache__/
 .databricks/
 .venv/
 .vscode/
+
+# Per-developer workspace host for the bundle (see README)
+resources/workspace.local.yml
