@@ -233,7 +233,7 @@ serverless compute in the workspace, so Databricks Connect is not used
 Optionally, [SQLTools](https://marketplace.visualstudio.com/items?itemName=mtxr.sqltools)
 with the Databricks driver queries the resulting tables.
 
-![VS Code: Databricks extension signed in with the Free Edition profile, the deployed pipeline with Run Status Success, and the pipeline run log](docs/images/vscode.png)
+![VS Code: Databricks extension with the deployed pipeline, a SQLTools query over the gold view, and the pipeline run log](docs/images/vscode.png)
 
 **One-time setup** (all files below are git-ignored):
 
