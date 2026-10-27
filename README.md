@@ -9,6 +9,25 @@ no reload on schema drift.
 Adding a source collection — the 10th or the 100th — is one entry in
 `config/collections.yaml`. No code changes.
 
+## Results
+
+The pipeline was deployed and run end to end on Databricks Free
+Edition (serverless compute, Unity Catalog `workspace` catalog) against
+hand-crafted Debezium MongoDB change events for three collections.
+SCD 1 and SCD 2 merges, pre-image deletes, same-millisecond event
+ordering by oplog `ord`, tombstone dropping, schema-drift documents,
+typed projections and a gold view joining collections on a VARIANT
+extraction all behaved as designed; see
+[Verifying the results](#verifying-the-results) for the queries and
+their output.
+
+![Completed pipeline run on Databricks Free Edition: three collections flow from landing volume to bronze, silver feed and silver, then into typed projections and the gold view](docs/images/pipeline-graph.png)
+
+Limitation: this is a functional verification, not a benchmark. There
+are no throughput or latency numbers, the sample events are not
+committed, and CI runs unit tests only for the Spark-free modules, so
+changes to `flows.py` are verified only by deploying to a dev target.
+
 Companion projects:
 [debezium-cdc-pipeline](https://github.com/morillo/debezium-cdc-pipeline)
 (the relational/MySQL twin of this framework),
@@ -201,7 +220,9 @@ tombstone, schema-drift documents (ObjectId and integer `_id`s, fields
 present on one document only), a metadata-defined drop expectation
 evaluated against the document, typed projections for both SCD types
 (`$date` → timestamp, `$numberLong` → long), and a gold view joining
-two collections on a VARIANT extraction — all confirmed correct.
+two collections on a VARIANT extraction — all confirmed correct. The
+queries in [Verifying the results](#verifying-the-results) show each of
+these.
 
 ### Running from VS Code
 
@@ -209,8 +230,12 @@ The [Databricks VS Code extension](https://marketplace.visualstudio.com/items?it
 deploys and runs the bundle from the editor; the pipeline runs on
 serverless compute in the workspace, so Databricks Connect is not used
 ("Databricks Connect disabled" in the status bar is expected).
+Optionally, [SQLTools](https://marketplace.visualstudio.com/items?itemName=mtxr.sqltools)
+with the Databricks driver queries the resulting tables.
 
-**One-time setup** (both files are git-ignored):
+![VS Code: Databricks extension signed in with the Free Edition profile, the deployed pipeline with Run Status Success, and the pipeline run log](docs/images/vscode.png)
+
+**One-time setup** (all files below are git-ignored):
 
 1. Run `uv sync`, and authenticate the CLI to your workspace
    (`databricks auth login --host <workspace-url>`).
@@ -238,12 +263,25 @@ serverless compute in the workspace, so Databricks Connect is not used
      "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
      "python.testing.pytestEnabled": true,
      "python.testing.pytestArgs": ["tests"],
-     "databricks.python.environmentSetup": "manual"
+     "databricks.python.environmentSetup": "manual",
+     "sqltools.connections": [
+       {
+         "name": "debezium mongodb cdc",
+         "driver": "Databricks",
+         "connectionMethod": "VS Code Extension (beta)",
+         "path": "/sql/1.0/warehouses/<warehouse-id>",
+         "catalog": "workspace",
+         "schema": "cdc_mongo_fw"
+       }
+     ]
    }
    ```
 
    `environmentSetup: manual` stops the extension from rebuilding the
-   uv-managed `.venv`.
+   uv-managed `.venv`. The SQLTools connection reuses the extension's
+   login, so no token is stored; omit it if you don't use SQLTools.
+   Set `catalog` to your `catalog` variable (`cdc_dev` outside Free
+   Edition).
 
 **Run:**
 
@@ -260,6 +298,73 @@ serverless compute in the workspace, so Databricks Connect is not used
    `[dev <you>] debezium-mongodb-cdc-dev` → **Deploy the bundle and run
    the pipeline**. Dataset status appears under the pipeline; full
    output via **Databricks: Show bundle logs**.
+5. Full refresh: same row → **Deploy the bundle and select pipeline
+   tables for partial update** → select the tables and **Full
+   refresh** → confirm.
+6. Query the results: save the queries from
+   [Verifying the results](#verifying-the-results) in a `.sql` file
+   (e.g. the git-ignored `.vscode/queries.sql`), put the cursor in a
+   query and press `Cmd+E Cmd+E` (SQLTools).
+
+### Verifying the results
+
+Run these in the Databricks SQL Editor (with catalog `workspace` and
+schema `cdc_mongo_fw` selected) or with SQLTools from VS Code. Outside
+Free Edition, use your `catalog` and `target_schema` values.
+
+```sql
+-- 1. Row counts per silver table (customers is SCD2: all versions + current)
+SELECT 'customers (all versions)' AS dataset, count(*) AS row_count FROM customers_silver
+UNION ALL SELECT 'customers (current)', count(*) FROM customers_silver WHERE __END_AT IS NULL
+UNION ALL SELECT 'orders', count(*) FROM orders_silver
+UNION ALL SELECT 'products', count(*) FROM products_silver;
+
+-- 2. SCD2 history of customers (document kept as JSON text in doc_json)
+SELECT _id, doc_json:name::string AS name, doc_json:email::string AS email,
+       __START_AT, __END_AT
+FROM customers_silver
+ORDER BY _id, __START_AT;
+
+-- 3. Typed projections defined in config/collections.yaml
+SELECT * FROM customers_typed ORDER BY _id;
+SELECT * FROM orders_typed ORDER BY _id;
+
+-- 4. Gold view defined in config/collections.yaml
+SELECT * FROM gold_customer_order_counts ORDER BY customer_id;
+
+-- 5. Data-quality results per flow and expectation (whole pipeline's event log)
+SELECT e.origin.flow_name AS flow, ex.name AS expectation,
+       SUM(ex.passed_records) AS passed, SUM(ex.failed_records) AS failed
+FROM event_log(TABLE(workspace.cdc_mongo_fw.customers_silver)) e
+LATERAL VIEW explode(from_json(
+  e.details:flow_progress.data_quality.expectations,
+  'array<struct<name:string,dataset:string,passed_records:bigint,failed_records:bigint>>'
+)) t AS ex
+WHERE e.event_type = 'flow_progress'
+GROUP BY ALL
+ORDER BY flow, expectation;
+```
+
+What the verification run returned:
+
+- **Counts:** `customers_silver` 6 rows, 2 of them current;
+  `orders_silver` 2; `products_silver` 2.
+- **SCD2 history:** Alice's email change is a closed row plus a current
+  row. Bob's update and delete in the same millisecond are ordered by
+  oplog `ord` (500, then 501), so his last version is closed. Carol is
+  deleted through a pre-image. Dave has an integer `_id` (`42`); the
+  others have ObjectIds. `__START_AT`/`__END_AT` are the
+  `(ts_ms, ord)` sequence struct.
+- **Typed projections:** `signup_at` comes from `$date` as a timestamp,
+  `total_cents` from `$numberLong` as a long. Fields missing from a
+  document come back NULL (schema drift).
+- **Gold:** Alice has 2 orders, Dave has 0.
+- **Expectations:** on `customers`, `valid_op` and `valid_document_id`
+  drop the Kafka tombstone, which has neither an `op` nor an `_id`.
+  The `positive_total` warning flags the refund order (`-500`) but
+  keeps it, and `valid_email` drops nothing. The event log adds up
+  every update, including full refreshes, so these counts grow with
+  each run.
 
 ## Project layout
 
@@ -275,6 +380,7 @@ debezium-mongodb-cdc-pipeline/
 │       ├── debezium.py                # Envelope constants (Spark-free)
 │       └── flows.py                   # Dataset factories (pyspark.pipelines)
 ├── tests/                             # Unit tests (run anywhere, no Spark)
+├── docs/images/                       # README screenshots
 ├── .github/workflows/ci.yml           # Secret scan, lint, test, validate, deploy
 ├── .github/dependabot.yml             # Weekly uv + Actions updates
 └── .pre-commit-config.yaml            # gitleaks hook
